@@ -11,9 +11,8 @@
 
   "d1_databases": [
     {
-      "binding": "DB",
-      "database_name": "flytripvisa-db",
-      "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+      "binding": "D1",
+      "database_id": "a49b13c8-e420-48b4-8967-f9752e1bc5fa"
     }
   ],
 
