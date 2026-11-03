@@ -1,4 +1,4 @@
-# FlyTripVisa-Login — Full-Stack Serverless Auth
+# Login — Full-Stack Serverless Auth
 
 A production-ready authentication system built entirely on Cloudflare's edge platform:
 
