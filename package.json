@@ -1,21 +1,17 @@
-{
-  "name": "login",
-  "version": "1.0.0",
-  "description": "Login — full-stack serverless auth app on Cloudflare Workers + D1",
-  "type": "module",
-  "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
-    "db:create": "wrangler d1 create flytripvisa-db",
-    "db:migrate:local": "wrangler d1 execute flytripvisa-db --local --file=schema.sql",
-    "db:migrate:remote": "wrangler d1 execute flytripvisa-db --remote --file=schema.sql",
-    "db:query": "wrangler d1 execute flytripvisa-db --local --command",
-    "secret:set": "wrangler secret put AUTH_SECRET",
-    "tail": "wrangler tail"
-  },
-  "devDependencies": {
-    "wrangler": "^3.90.0"
-  },
-  "engines": {
-    "node": ">=18"
-  }
+1:  {
+2:    "name": "login",
+3:    "version": "1.0.0",
+4:    "description": "FlyTripVisa - full-stack serverless auth app on Cloudflare Workers + D1",
+5:    "type": "module",
+6:    "scripts": {
+7:      "dev": "wrangler dev",
+8:      "deploy": "wrangler deploy",
+9:      "db:create": "wrangler d1 create flytripvisa-db",
+10:     "db:migrate:local": "wrangler d1 execute flytripvisa-db --local --file=schema.sql",
+11:     "db:migrate:remote": "wrangler d1 execute flytripvisa-db --remote --file=schema.sql",
+12:     "db:query": "wrangler d1 execute flytripvisa-db --local --command",
+13:     "secret:set": "wrangler secret put AUTH_SECRET",
+14:     "tail": "wrangler tail"
+15:   },
+16:   "devDependencies": {
+17:
