@@ -1,0 +1,21 @@
+{
+  "name": "login",
+  "version": "1.0.0",
+  "description": "Login — full-stack serverless auth app on Cloudflare Workers + D1",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:create": "wrangler d1 create flytripvisa-db",
+    "db:migrate:local": "wrangler d1 execute flytripvisa-db --local --file=schema.sql",
+    "db:migrate:remote": "wrangler d1 execute flytripvisa-db --remote --file=schema.sql",
+    "db:query": "wrangler d1 execute flytripvisa-db --local --command",
+    "secret:set": "wrangler secret put AUTH_SECRET",
+    "tail": "wrangler tail"
+  },
+  "devDependencies": {
+    "wrangler": "^3.90.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
