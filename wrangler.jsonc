@@ -1,9 +1,14 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "login",
-  "main": "worker.js",
+  "main": "src/worker.js",
   "compatibility_date": "2025-10-01",
   "compatibility_flags": ["nodejs_compat"],
+
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS"
+  },
 
   "observability": {
     "enabled": true
@@ -11,7 +16,8 @@
 
   "d1_databases": [
     {
-      "binding": "D1",
+      "binding": "DB",
+      "database_name": "flytripvisa-db",
       "database_id": "a49b13c8-e420-48b4-8967-f9752e1bc5fa"
     }
   ],
@@ -21,4 +27,3 @@
     "TOKEN_TTL_SECONDS": "2592000"
   }
 }
-
