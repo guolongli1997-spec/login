@@ -1,12 +1,13 @@
 /**
- * FlyTripVisa — Auth Worker
- * Cloudflare Worker handling /api/auth/signup and /api/auth/login.
+ * FlyTripVisa - Login — Auth Worker
+ * Cloudflare Worker handling /api/auth/signup, /api/auth/login, /api/auth/me.
  * Connects to D1 for user storage, hashes passwords with PBKDF2 (Web Crypto),
  * and issues HS256 JWT session tokens.
  *
  * Bindings (see wrangler.jsonc):
  *   - DB          (D1)       → users table
  *   - AUTH_SECRET (secret)   → HMAC key for signing JWTs
+ *   - ASSETS      (assets)   → serves static files from /public
  *
  * If D1 is not bound (local dev without --local DB), the Worker falls back
  * to an in-memory mock store so the UI is fully testable.
@@ -113,91 +114,106 @@ export default {
       });
     }
 
-    const hasD1 = typeof env.DB !== 'undefined';
-
-    // ── /api/auth/signup ──
-    if (url.pathname === '/api/auth/signup' && request.method === 'POST') {
-      let body;
-      try { body = await request.json(); } catch { return json({ error: 'Invalid JSON body.' }, 400); }
-
-      const name = (body.name || '').trim();
-      const email = (body.email || '').trim().toLowerCase();
-      const password = body.password || '';
-
-      if (!name) return json({ error: 'Name is required.' }, 400);
-      if (!emailRe.test(email)) return json({ error: 'A valid email address is required.' }, 400);
-      if (password.length < 8) return json({ error: 'Password must be at least 8 characters.' }, 400);
-
-      const passwordHash = await hashPassword(password);
-
-      if (hasD1) {
-        try {
-          await env.DB.prepare(
-            'INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)'
-          ).bind(name, email, passwordHash).run();
-        } catch (e) {
-          if (String(e.message).includes('UNIQUE')) {
-            return json({ error: 'An account with that email already exists.' }, 409);
-          }
-          return json({ error: 'Database error: ' + e.message }, 500);
-        }
-      } else {
-        if ([...mockUsers.values()].some(u => u.email === email)) {
-          return json({ error: 'An account with that email already exists.' }, 409);
-        }
-        const id = mockUsers.size + 1;
-        mockUsers.set(id, { id, name, email, password_hash: passwordHash, created_at: new Date().toISOString() });
-      }
-
-      const token = await signJWT(
-        { sub: email, name, iat: Date.now(), exp: Date.now() + 30 * 24 * 60 * 60 * 1000 },
-        env.AUTH_SECRET || 'dev-secret-change-me'
-      );
-      return json({ token, user: { name, email }, redirect: 'index.html' }, 201);
+    // ── API routes take priority ──
+    if (url.pathname.startsWith('/api/')) {
+      return handleAPI(request, env, url);
     }
 
-    // ── /api/auth/login ──
-    if (url.pathname === '/api/auth/login' && request.method === 'POST') {
-      let body;
-      try { body = await request.json(); } catch { return json({ error: 'Invalid JSON body.' }, 400); }
-
-      const email = (body.email || '').trim().toLowerCase();
-      const password = body.password || '';
-
-      if (!email || !password) return json({ error: 'Email and password are required.' }, 400);
-
-      let user;
-      if (hasD1) {
-        user = await env.DB.prepare(
-          'SELECT * FROM users WHERE email = ?'
-        ).bind(email).first();
-      } else {
-        user = [...mockUsers.values()].find(u => u.email === email) || null;
-      }
-
-      if (!user) return json({ error: 'No account found with that email.' }, 401);
-
-      const ok = await verifyPassword(password, user.password_hash);
-      if (!ok) return json({ error: 'Incorrect password. Please try again.' }, 401);
-
-      const token = await signJWT(
-        { sub: user.email, name: user.name, iat: Date.now(), exp: Date.now() + 30 * 24 * 60 * 60 * 1000 },
-        env.AUTH_SECRET || 'dev-secret-change-me'
-      );
-      return json({ token, user: { name: user.name, email: user.email }, redirect: 'index.html' }, 200);
+    // ── Static assets via ASSETS binding ──
+    if (env.ASSETS) {
+      return env.ASSETS.fetch(request);
     }
 
-    // ── /api/auth/me (verify token) ──
-    if (url.pathname === '/api/auth/me' && request.method === 'GET') {
-      const auth = request.headers.get('Authorization') || '';
-      const token = auth.replace(/^Bearer\s+/i, '');
-      if (!token) return json({ error: 'No token provided.' }, 401);
-      const payload = await verifyJWT(token, env.AUTH_SECRET || 'dev-secret-change-me');
-      if (!payload) return json({ error: 'Invalid or expired token.' }, 401);
-      return json({ user: { name: payload.name, email: payload.sub } }, 200);
-    }
-
-    // ── 404 ──
-    return json({ error: 'Endpoint not found.', path: url.pathname }, 404);
+    return json({ error: 'Static assets binding not configured.' }, 500);
   },
 };
+
+async function handleAPI(request, env, url) {
+  const hasD1 = typeof env.DB !== 'undefined';
+  const secret = env.AUTH_SECRET || 'dev-secret-change-me';
+
+  // ── /api/auth/signup ──
+  if (url.pathname === '/api/auth/signup' && request.method === 'POST') {
+    let body;
+    try { body = await request.json(); } catch { return json({ error: 'Invalid JSON body.' }, 400); }
+
+    const name = (body.name || '').trim();
+    const email = (body.email || '').trim().toLowerCase();
+    const password = body.password || '';
+
+    if (!name) return json({ error: 'Name is required.' }, 400);
+    if (!emailRe.test(email)) return json({ error: 'A valid email address is required.' }, 400);
+    if (password.length < 8) return json({ error: 'Password must be at least 8 characters.' }, 400);
+
+    const passwordHash = await hashPassword(password);
+
+    if (hasD1) {
+      try {
+        await env.DB.prepare(
+          'INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)'
+        ).bind(name, email, passwordHash).run();
+      } catch (e) {
+        if (String(e.message).includes('UNIQUE')) {
+          return json({ error: 'An account with that email already exists.' }, 409);
+        }
+        return json({ error: 'Database error: ' + e.message }, 500);
+      }
+    } else {
+      if ([...mockUsers.values()].some(u => u.email === email)) {
+        return json({ error: 'An account with that email already exists.' }, 409);
+      }
+      const id = mockUsers.size + 1;
+      mockUsers.set(id, { id, name, email, password_hash: passwordHash, created_at: new Date().toISOString() });
+    }
+
+    const token = await signJWT(
+      { sub: email, name, iat: Date.now(), exp: Date.now() + 30 * 24 * 60 * 60 * 1000 },
+      secret
+    );
+    return json({ token, user: { name, email }, redirect: 'index.html' }, 201);
+  }
+
+  // ── /api/auth/login ──
+  if (url.pathname === '/api/auth/login' && request.method === 'POST') {
+    let body;
+    try { body = await request.json(); } catch { return json({ error: 'Invalid JSON body.' }, 400); }
+
+    const email = (body.email || '').trim().toLowerCase();
+    const password = body.password || '';
+
+    if (!email || !password) return json({ error: 'Email and password are required.' }, 400);
+
+    let user;
+    if (hasD1) {
+      user = await env.DB.prepare(
+        'SELECT * FROM users WHERE email = ?'
+      ).bind(email).first();
+    } else {
+      user = [...mockUsers.values()].find(u => u.email === email) || null;
+    }
+
+    if (!user) return json({ error: 'No account found with that email.' }, 401);
+
+    const ok = await verifyPassword(password, user.password_hash);
+    if (!ok) return json({ error: 'Incorrect password. Please try again.' }, 401);
+
+    const token = await signJWT(
+      { sub: user.email, name: user.name, iat: Date.now(), exp: Date.now() + 30 * 24 * 60 * 60 * 1000 },
+      secret
+    );
+    return json({ token, user: { name: user.name, email: user.email }, redirect: 'index.html' }, 200);
+  }
+
+  // ── /api/auth/me (verify token) ──
+  if (url.pathname === '/api/auth/me' && request.method === 'GET') {
+    const auth = request.headers.get('Authorization') || '';
+    const token = auth.replace(/^Bearer\s+/i, '');
+    if (!token) return json({ error: 'No token provided.' }, 401);
+    const payload = await verifyJWT(token, secret);
+    if (!payload) return json({ error: 'Invalid or expired token.' }, 401);
+    return json({ user: { name: payload.name, email: payload.sub } }, 200);
+  }
+
+  // ── 404 ──
+  return json({ error: 'Endpoint not found.', path: url.pathname }, 404);
+}
