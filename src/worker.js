@@ -1,5 +1,5 @@
 /**
- * FlyTripVisa - Login — Auth Worker
+ * FlyTripVisa — Auth Worker
  * Cloudflare Worker handling /api/auth/signup, /api/auth/login, /api/auth/me.
  * Connects to D1 for user storage, hashes passwords with PBKDF2 (Web Crypto),
  * and issues HS256 JWT session tokens.
