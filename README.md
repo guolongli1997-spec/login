@@ -178,7 +178,7 @@ Then in the Worker's `fetch`, serve assets for non-API routes. The Worker's `/ap
 ## Project structure
 
 ```
-flytripvisa/
+login/
 ├── auth.html        # Dark login/signup portal
 ├── index.html       # Session-aware landing page
 ├── worker.js        # Cloudflare Worker auth API
