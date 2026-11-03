@@ -185,4 +185,23 @@ login/
 ├── wrangler.jsonc   # Worker + D1 config
 ├── schema.sql       # D1 users table
 └── README.md        # This file
-```
+
+
+## Full Project Structure:
+
+login/
+├── package.json
+├── wrangler.jsonc
+├── schema.sql
+├── .gitignore
+├── .dev.vars
+├── README.md
+├── src/
+│   └── worker.js
+└── public/
+    ├── index.html
+    ├── auth.html
+    ├── _routes.json
+    └── robots.txt
+
+
