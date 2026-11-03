@@ -210,15 +210,19 @@
     }
 
     // ---- Loading state ----
+    const btnLabels = new WeakMap();
     function setLoading(form, loading) {
       const btn = form.querySelector('button[type=submit]');
-      const label = btn.querySelector('.btn-label');
       if (loading) {
+        if (!btnLabels.has(btn)) {
+          btnLabels.set(btn, btn.querySelector('.btn-label')?.textContent || 'Submit');
+        }
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner"></span><span>Please wait…</span>';
       } else {
         btn.disabled = false;
-        btn.innerHTML = '<span class="btn-label">' + (label?.textContent || 'Submit') + '</span>';
+        const original = btnLabels.get(btn) || 'Submit';
+        btn.innerHTML = '<span class="btn-label">' + original + '</span>';
       }
     }
 
