@@ -1,21 +1,4 @@
-# Dependencies
-node_modules/
-
-# Wrangler / Cloudflare
-.wrangler/
+node_modules
 .dev.vars
-.dev.vars.*
-wrangler.toml
-
-# OS / editor
+.wrangler
 .DS_Store
-Thumbs.db
-.vscode/
-.idea/
-
-# Logs
-*.log
-npm-debug.log*
-
-# Build output
-dist/
