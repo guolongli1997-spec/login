@@ -1,219 +1,355 @@
 /**
- * FlyTripVisa — Auth Worker
- * Cloudflare Worker handling /api/auth/signup, /api/auth/login, /api/auth/me.
- * Connects to D1 for user storage, hashes passwords with PBKDF2 (Web Crypto),
- * and issues HS256 JWT session tokens.
+ * flytripvisa-auth — Cloudflare Worker
+ * Zero dependencies. Web Crypto only.
  *
- * Bindings (see wrangler.jsonc):
- *   - DB          (D1)       → users table
- *   - AUTH_SECRET (secret)   → HMAC key for signing JWTs
- *   - ASSETS      (assets)   → serves static files from /public
- *
- * If D1 is not bound (local dev without --local DB), the Worker falls back
- * to an in-memory mock store so the UI is fully testable.
+ * Routes:
+ *   POST /api/auth/signup
+ *   POST /api/auth/login
+ *   GET  /api/auth/me
+ *   (everything else -> static assets from ./public)
  */
 
-// ──────────────────────────────────────────────
-// Helpers
-// ──────────────────────────────────────────────
+// ------------------------------------------------------------------
+// Constants
+// ------------------------------------------------------------------
+const PBKDF2_ITERATIONS = 100000;
+const PBKDF2_KEYLEN_BITS = 256;
+const JWT_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// ------------------------------------------------------------------
+// In-memory fallback store (used only when env.DB is not bound)
+// ------------------------------------------------------------------
+const MEMORY_USERS = new Map(); // email -> user record
+let warnedNoDB = false;
+
+function warnNoDB() {
+  if (!warnedNoDB) {
+    console.warn(
+      "[flytripvisa-auth] WARNING: env.DB not bound. Using in-memory store. Data will NOT persist and is NOT shared across isolates."
+    );
+    warnedNoDB = true;
+  }
+}
+
+// ------------------------------------------------------------------
+// Encoding helpers
+// ------------------------------------------------------------------
 const enc = new TextEncoder();
-const dec = new TextDecoder();
 
-const json = (data, status = 200, extra = {}) =>
-  new Response(JSON.stringify(data), {
-    status,
-    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', ...extra },
-  });
+function toHex(buf) {
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+function fromHex(hex) {
+  const out = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < out.length; i++) {
+    out[i] = parseInt(hex.substr(i * 2, 2), 16);
+  }
+  return out;
+}
+function b64urlEncode(bytes) {
+  let str = "";
+  const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  for (const b of arr) str += String.fromCharCode(b);
+  return btoa(str).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function b64urlDecode(str) {
+  str = str.replace(/-/g, "+").replace(/_/g, "/");
+  while (str.length % 4) str += "=";
+  const bin = atob(str);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+function b64urlEncodeString(s) {
+  return b64urlEncode(enc.encode(s));
+}
 
-const b64url = (buf) => {
-  const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
-  let bin = '';
-  for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
-};
-
-const b64urlStr = (str) => btoa(str).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
-
-// ──────────────────────────────────────────────
-// Password hashing — PBKDF2 (SHA-256), 100k iterations
-// ──────────────────────────────────────────────
-async function hashPassword(password, saltB64) {
-  const salt = saltB64
-    ? Uint8Array.from(atob(saltB64.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0))
-    : crypto.getRandomValues(new Uint8Array(16));
-  const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits']);
+// ------------------------------------------------------------------
+// PBKDF2 password hashing
+// ------------------------------------------------------------------
+async function hashPassword(password, saltHex) {
+  const saltBytes = saltHex ? fromHex(saltHex) : crypto.getRandomValues(new Uint8Array(16));
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(password),
+    "PBKDF2",
+    false,
+    ["deriveBits"]
+  );
   const bits = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+    { name: "PBKDF2", salt: saltBytes, iterations: PBKDF2_ITERATIONS, hash: "SHA-256" },
     keyMaterial,
-    256
+    PBKDF2_KEYLEN_BITS
   );
-  return `${b64url(salt)}:${b64url(bits)}`;
+  return { hash: toHex(bits), salt: toHex(saltBytes) };
 }
 
-async function verifyPassword(password, stored) {
-  const [saltB64] = stored.split(':');
-  const computed = await hashPassword(password, saltB64);
-  return computed === stored;
+async function verifyPassword(password, saltHex, expectedHashHex) {
+  const { hash } = await hashPassword(password, saltHex);
+  if (hash.length !== expectedHashHex.length) return false;
+  let diff = 0;
+  for (let i = 0; i < hash.length; i++) diff |= hash.charCodeAt(i) ^ expectedHashHex.charCodeAt(i);
+  return diff === 0;
 }
 
-// ──────────────────────────────────────────────
-// JWT (HS256) — sign & verify
-// ──────────────────────────────────────────────
+// ------------------------------------------------------------------
+// JWT (HS256) — manual implementation
+// ------------------------------------------------------------------
+async function hmacKey(secret) {
+  return crypto.subtle.importKey(
+    "raw",
+    enc.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign", "verify"]
+  );
+}
+
 async function signJWT(payload, secret) {
-  const header = { alg: 'HS256', typ: 'JWT' };
-  const data = `${b64urlStr(JSON.stringify(header))}.${b64urlStr(JSON.stringify(payload))}`;
-  const key = await crypto.subtle.importKey(
-    'raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
-  );
-  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(data));
-  return `${data}.${b64url(sig)}`;
+  const header = { alg: "HS256", typ: "JWT" };
+  const h = b64urlEncodeString(JSON.stringify(header));
+  const p = b64urlEncodeString(JSON.stringify(payload));
+  const data = `${h}.${p}`;
+  const key = await hmacKey(secret);
+  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(data));
+  return `${data}.${b64urlEncode(sig)}`;
 }
 
 async function verifyJWT(token, secret) {
-  const [data, sig] = token.split('.');
-  if (!data || !sig) return null;
-  const key = await crypto.subtle.importKey(
-    'raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']
-  );
+  if (typeof token !== "string") return null;
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+  const [h, p, s] = parts;
+  const key = await hmacKey(secret);
   const valid = await crypto.subtle.verify(
-    'HMAC', key,
-    Uint8Array.from(atob(sig.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)),
-    enc.encode(data)
+    "HMAC",
+    key,
+    b64urlDecode(s),
+    enc.encode(`${h}.${p}`)
   );
   if (!valid) return null;
-  const payload = JSON.parse(dec.decode(Uint8Array.from(atob(data.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0))));
-  if (payload.exp && Date.now() > payload.exp) return null;
+  let payload;
+  try {
+    payload = JSON.parse(new TextDecoder().decode(b64urlDecode(p)));
+  } catch {
+    return null;
+  }
+  const now = Math.floor(Date.now() / 1000);
+  if (typeof payload.exp !== "number" || payload.exp < now) return null;
   return payload;
 }
 
-// ──────────────────────────────────────────────
-// Mock store (fallback when D1 is absent)
-// ──────────────────────────────────────────────
-const mockUsers = new Map();
+// ------------------------------------------------------------------
+// Response helpers
+// ------------------------------------------------------------------
+// NOTE: CORS is wide-open for development convenience.
+// In production, replace "*" with your real domain, e.g.
+//   "https://flytripvisa.com"
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Access-Control-Max-Age": "86400",
+};
 
-// ──────────────────────────────────────────────
-// Validation
-// ──────────────────────────────────────────────
-const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+function json(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { "Content-Type": "application/json; charset=utf-8", ...CORS_HEADERS },
+  });
+}
 
-// ──────────────────────────────────────────────
-// Main handler
-// ──────────────────────────────────────────────
+function err(message, status = 400) {
+  return json({ success: false, error: message }, status);
+}
+
+function publicUser(u) {
+  return { id: u.id, name: u.name, email: u.email, role: u.role || "user" };
+}
+
+// ------------------------------------------------------------------
+// Storage abstraction (D1 with in-memory fallback)
+// ------------------------------------------------------------------
+async function findUserByEmail(env, email) {
+  if (env.DB) {
+    const row = await env.DB.prepare("SELECT * FROM users WHERE email = ?1").bind(email).first();
+    return row || null;
+  }
+  warnNoDB();
+  return MEMORY_USERS.get(email) || null;
+}
+
+async function createUser(env, user) {
+  if (env.DB) {
+    await env.DB.prepare(
+      `INSERT INTO users (id, email, name, password_hash, salt, role)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6)`
+    )
+      .bind(user.id, user.email, user.name, user.password_hash, user.salt, user.role || "user")
+      .run();
+    return user;
+  }
+  warnNoDB();
+  MEMORY_USERS.set(user.email, user);
+  return user;
+}
+
+// ------------------------------------------------------------------
+// Route handlers
+// ------------------------------------------------------------------
+async function handleSignup(request, env) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return err("Invalid JSON body", 400);
+  }
+  const name = (body.name || "").trim();
+  const email = (body.email || "").trim().toLowerCase();
+  const password = body.password || "";
+
+  if (!name || !email || !password) return err("name, email and password are required", 400);
+  if (!EMAIL_RE.test(email)) return err("Invalid email format", 400);
+  if (password.length < 6) return err("Password must be at least 6 characters", 400);
+
+  const existing = await findUserByEmail(env, email);
+  if (existing) return err("Email already registered", 409);
+
+  const { hash, salt } = await hashPassword(password);
+  const user = {
+    id: crypto.randomUUID(),
+    email,
+    name,
+    password_hash: hash,
+    salt,
+    role: "user",
+  };
+
+  try {
+    await createUser(env, user);
+  } catch (e) {
+    // Race condition on UNIQUE constraint
+    if (String(e).includes("UNIQUE")) return err("Email already registered", 409);
+    console.error("[signup] DB error:", e.message);
+    return err("Internal server error", 500);
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const token = await signJWT(
+    {
+      sub: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      iat: now,
+      exp: now + JWT_TTL_SECONDS,
+    },
+    env.AUTH_SECRET
+  );
+
+  return json({
+    success: true,
+    token,
+    user: publicUser(user),
+    redirect: "/index.html",
+  });
+}
+
+async function handleLogin(request, env) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return err("Invalid JSON body", 400);
+  }
+  const email = (body.email || "").trim().toLowerCase();
+  const password = body.password || "";
+
+  if (!email || !password) return err("email and password are required", 400);
+  if (!EMAIL_RE.test(email)) return err("Invalid email format", 400);
+
+  const user = await findUserByEmail(env, email);
+  if (!user) return err("Invalid email or password", 401);
+
+  const ok = await verifyPassword(password, user.salt, user.password_hash);
+  if (!ok) return err("Invalid email or password", 401);
+
+  const now = Math.floor(Date.now() / 1000);
+  const token = await signJWT(
+    {
+      sub: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role || "user",
+      iat: now,
+      exp: now + JWT_TTL_SECONDS,
+    },
+    env.AUTH_SECRET
+  );
+
+  return json({
+    success: true,
+    token,
+    user: publicUser(user),
+    redirect: "/index.html",
+  });
+}
+
+async function handleMe(request, env) {
+  const auth = request.headers.get("Authorization") || "";
+  const m = auth.match(/^Bearer\s+(.+)$/i);
+  if (!m) return err("Missing bearer token", 401);
+
+  const payload = await verifyJWT(m[1], env.AUTH_SECRET);
+  if (!payload) return err("Invalid or expired token", 401);
+
+  return json({
+    success: true,
+    user: {
+      id: payload.sub,
+      name: payload.name,
+      email: payload.email,
+      role: payload.role,
+    },
+  });
+}
+
+// ------------------------------------------------------------------
+// Main fetch handler
+// ------------------------------------------------------------------
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    const { pathname } = url;
 
     // CORS preflight
-    if (request.method === 'OPTIONS') {
-      return new Response(null, {
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-        },
-      });
+    if (request.method === "OPTIONS" && pathname.startsWith("/api/")) {
+      return new Response(null, { status: 204, headers: CORS_HEADERS });
     }
 
-    // ── API routes take priority ──
-    if (url.pathname.startsWith('/api/')) {
-      return handleAPI(request, env, url);
+    try {
+      if (pathname === "/api/auth/signup" && request.method === "POST") {
+        return await handleSignup(request, env);
+      }
+      if (pathname === "/api/auth/login" && request.method === "POST") {
+        return await handleLogin(request, env);
+      }
+      if (pathname === "/api/auth/me" && request.method === "GET") {
+        return await handleMe(request, env);
+      }
+      if (pathname.startsWith("/api/")) {
+        return err("Not found", 404);
+      }
+    } catch (e) {
+      console.error("[worker] unhandled error:", e && e.message);
+      return err("Internal server error", 500);
     }
 
-    // ── Static assets via ASSETS binding ──
+    // Fall through to static assets
     if (env.ASSETS) {
       return env.ASSETS.fetch(request);
     }
-
-    return json({ error: 'Static assets binding not configured.' }, 500);
+    return new Response("Not found", { status: 404 });
   },
 };
-
-async function handleAPI(request, env, url) {
-  const hasD1 = typeof env.DB !== 'undefined';
-  const secret = env.AUTH_SECRET || 'dev-secret-change-me';
-
-  // ── /api/auth/signup ──
-  if (url.pathname === '/api/auth/signup' && request.method === 'POST') {
-    let body;
-    try { body = await request.json(); } catch { return json({ error: 'Invalid JSON body.' }, 400); }
-
-    const name = (body.name || '').trim();
-    const email = (body.email || '').trim().toLowerCase();
-    const password = body.password || '';
-
-    if (!name) return json({ error: 'Name is required.' }, 400);
-    if (!emailRe.test(email)) return json({ error: 'A valid email address is required.' }, 400);
-    if (password.length < 8) return json({ error: 'Password must be at least 8 characters.' }, 400);
-
-    const passwordHash = await hashPassword(password);
-
-    if (hasD1) {
-      try {
-        await env.DB.prepare(
-          'INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)'
-        ).bind(name, email, passwordHash).run();
-      } catch (e) {
-        if (String(e.message).includes('UNIQUE')) {
-          return json({ error: 'An account with that email already exists.' }, 409);
-        }
-        return json({ error: 'Database error: ' + e.message }, 500);
-      }
-    } else {
-      if ([...mockUsers.values()].some(u => u.email === email)) {
-        return json({ error: 'An account with that email already exists.' }, 409);
-      }
-      const id = mockUsers.size + 1;
-      mockUsers.set(id, { id, name, email, password_hash: passwordHash, created_at: new Date().toISOString() });
-    }
-
-    const token = await signJWT(
-      { sub: email, name, iat: Date.now(), exp: Date.now() + 30 * 24 * 60 * 60 * 1000 },
-      secret
-    );
-    return json({ token, user: { name, email }, redirect: 'index.html' }, 201);
-  }
-
-  // ── /api/auth/login ──
-  if (url.pathname === '/api/auth/login' && request.method === 'POST') {
-    let body;
-    try { body = await request.json(); } catch { return json({ error: 'Invalid JSON body.' }, 400); }
-
-    const email = (body.email || '').trim().toLowerCase();
-    const password = body.password || '';
-
-    if (!email || !password) return json({ error: 'Email and password are required.' }, 400);
-
-    let user;
-    if (hasD1) {
-      user = await env.DB.prepare(
-        'SELECT * FROM users WHERE email = ?'
-      ).bind(email).first();
-    } else {
-      user = [...mockUsers.values()].find(u => u.email === email) || null;
-    }
-
-    if (!user) return json({ error: 'No account found with that email.' }, 401);
-
-    const ok = await verifyPassword(password, user.password_hash);
-    if (!ok) return json({ error: 'Incorrect password. Please try again.' }, 401);
-
-    const token = await signJWT(
-      { sub: user.email, name: user.name, iat: Date.now(), exp: Date.now() + 30 * 24 * 60 * 60 * 1000 },
-      secret
-    );
-    return json({ token, user: { name: user.name, email: user.email }, redirect: 'index.html' }, 200);
-  }
-
-  // ── /api/auth/me (verify token) ──
-  if (url.pathname === '/api/auth/me' && request.method === 'GET') {
-    const auth = request.headers.get('Authorization') || '';
-    const token = auth.replace(/^Bearer\s+/i, '');
-    if (!token) return json({ error: 'No token provided.' }, 401);
-    const payload = await verifyJWT(token, secret);
-    if (!payload) return json({ error: 'Invalid or expired token.' }, 401);
-    return json({ user: { name: payload.name, email: payload.sub } }, 200);
-  }
-
-  // ── 404 ──
-  return json({ error: 'Endpoint not found.', path: url.pathname }, 404);
-}
