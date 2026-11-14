@@ -1,269 +1,363 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>FlyTripVisa — Sign in or Create an Account</title>
-  <meta name="description" content="Log in or create your FlyTripVisa account." />
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            ink:  { 950:'#000000', 900:'#0a0a0a', 850:'#0f0f0f', 800:'#161616', 700:'#1f1f1f', 600:'#2a2a2a', 500:'#3a3a3a' },
-            accent: { DEFAULT:'#3b82f6', dark:'#2563eb', light:'#60a5fa' }
-          }
-        }
-      }
-    };
-  </script>
-  <style>
-    body { font-family: 'Inter', system-ui, sans-serif; background:#000; }
-    .form-panel { transition: opacity .4s ease, transform .4s ease; }
-    .hidden-panel { opacity:0; transform:translateY(10px); pointer-events:none; position:absolute; inset:0; }
-    .visible-panel { opacity:1; transform:translateY(0); position:relative; }
-    .toggle-knob { transition: transform .35s cubic-bezier(.4,0,.2,1); }
-    .field:focus { border-color:#3b82f6; box-shadow:0 0 0 3px rgba(59,130,246,.18); background:#0f0f0f; }
-    .field { transition: border-color .2s, box-shadow .2s, background .2s; }
-    @keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
-    .fade-up { animation: fadeUp .55s ease both; }
-    ::-webkit-scrollbar{width:8px} ::-webkit-scrollbar-thumb{background:#2a2a2a;border-radius:4px}
-    .spinner{border:2px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;width:16px;height:16px;animation:spin .6s linear infinite;display:inline-block}
-    @keyframes spin{to{transform:rotate(360deg)}}
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sign in — FLY VIEW VISA</title>
+<style>
+  :root {
+    --bg: #000000;
+    --card: #0b0b0d;
+    --border: #1e1e22;
+    --text: #f5f5f7;
+    --muted: #8a8a92;
+    --accent: #2f6bff;
+    --accent-2: #1a4fd6;
+    --danger: #ff4d4d;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: radial-gradient(1200px 600px at 50% -10%, #101425 0%, #000 55%);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+  }
+  .card {
+    width: 100%; max-width: 420px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 28px 28px 24px;
+    box-shadow: 0 30px 80px rgba(0,0,0,.6);
+  }
+  .brand { text-align: center; margin-bottom: 22px; }
+  .brand .logo {
+    display: inline-flex; align-items: center; gap: 10px;
+    font-weight: 800; letter-spacing: .5px; font-size: 15px;
+    color: var(--text);
+  }
+  .brand .logo .dot {
+    width: 26px; height: 26px; border-radius: 8px;
+    background: linear-gradient(135deg, var(--accent), #7aa2ff);
+    display: inline-block;
+  }
+  .brand h1 { font-size: 22px; margin: 14px 0 4px; }
+  .brand p { color: var(--muted); font-size: 13px; margin: 0; }
+
+  /* Tabs */
+  .tabs {
+    position: relative;
+    display: grid; grid-template-columns: 1fr 1fr;
+    background: #101014;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 4px;
+    margin: 22px 0 20px;
+  }
+  .tabs .indicator {
+    position: absolute; top: 4px; bottom: 4px; left: 4px;
+    width: calc(50% - 4px);
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    border-radius: 9px;
+    transition: transform .28s cubic-bezier(.4,0,.2,1);
+    z-index: 0;
+  }
+  .tabs[data-active="signup"] .indicator { transform: translateX(100%); }
+  .tabs button {
+    position: relative; z-index: 1;
+    background: transparent; border: 0; color: var(--muted);
+    font-size: 14px; font-weight: 600; padding: 10px 0;
+    cursor: pointer; transition: color .2s;
+  }
+  .tabs button.active { color: #fff; }
+
+  /* Forms */
+  form { display: none; flex-direction: column; gap: 12px; }
+  form.active { display: flex; }
+  label { font-size: 12px; color: var(--muted); font-weight: 600; }
+  input {
+    width: 100%;
+    background: #0f0f12;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 14px;
+    outline: none;
+    transition: border-color .2s, box-shadow .2s;
+  }
+  input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(47,107,255,.18);
+  }
+  .btn-primary {
+    margin-top: 6px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    border: 0; color: #fff; font-weight: 700;
+    padding: 12px 14px; border-radius: 10px; font-size: 14px;
+    cursor: pointer; transition: filter .2s, transform .05s;
+  }
+  .btn-primary:hover { filter: brightness(1.08); }
+  .btn-primary:active { transform: translateY(1px); }
+  .btn-primary:disabled { opacity: .55; cursor: not-allowed; }
+
+  .msg { font-size: 13px; min-height: 18px; margin-top: 4px; }
+  .msg.error { color: var(--danger); }
+  .msg.ok { color: #3ddc84; }
+
+  /* Divider */
+  .divider {
+    display: flex; align-items: center; gap: 10px;
+    color: var(--muted); font-size: 12px; margin: 20px 0 14px;
+  }
+  .divider::before, .divider::after {
+    content: ""; flex: 1; height: 1px; background: var(--border);
+  }
+
+  /* Social buttons */
+  .socials { display: flex; flex-direction: column; gap: 10px; }
+  .social-btn {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    padding: 11px 14px; border-radius: 10px;
+    border: 1px solid var(--border);
+    background: #0f0f12; color: var(--text);
+    font-size: 14px; font-weight: 600;
+    cursor: pointer; transition: background .2s, transform .05s;
+  }
+  .social-btn:hover { background: #15151a; }
+  .social-btn:active { transform: translateY(1px); }
+  .social-btn svg { width: 18px; height: 18px; }
+
+  .foot { text-align: center; color: var(--muted); font-size: 12px; margin-top: 18px; }
+</style>
 </head>
-<body class="min-h-screen bg-ink-950 text-slate-200 flex items-center justify-center p-4">
-
-  <div class="w-full max-w-md fade-up">
-
-    <!-- Brand -->
-    <div class="text-center mb-7">
-      <a href="index.html" class="inline-flex items-center gap-2.5 text-2xl font-extrabold text-white">
-        <span class="w-10 h-10 rounded-xl bg-accent text-white grid place-items-center font-bold shadow-lg shadow-accent/30">F</span>
-        FlyTripVisa
-      </a>
-      <p class="text-sm text-slate-500 mt-2">Your visa journey, simplified.</p>
+<body>
+  <div class="card">
+    <div class="brand">
+      <div class="logo"><span class="dot"></span> FLY VIEW VISA</div>
+      <h1 id="title">Welcome back</h1>
+      <p id="subtitle">Sign in to continue your journey</p>
     </div>
 
-    <!-- Card -->
-    <div class="bg-ink-850 rounded-2xl border border-ink-700 shadow-2xl shadow-black/60 p-6 sm:p-8">
-
-      <!-- Toggle -->
-      <div class="relative flex bg-ink-800 rounded-xl p-1 mb-7" role="tablist" aria-label="Auth mode">
-        <span id="toggle-pill" class="absolute top-1 left-1 h-[calc(100%-0.5rem)] w-[calc(50%-0.25rem)] bg-accent rounded-lg shadow-lg shadow-accent/30 toggle-knob"></span>
-        <button id="tab-login" onclick="switchTab('login')"
-          class="relative z-10 flex-1 py-2.5 text-sm font-semibold rounded-lg transition-colors duration-300 text-white">
-          Log in
-        </button>
-        <button id="tab-signup" onclick="switchTab('signup')"
-          class="relative z-10 flex-1 py-2.5 text-sm font-semibold rounded-lg transition-colors duration-300 text-slate-400">
-          Sign up
-        </button>
-      </div>
-
-      <!-- Panels -->
-      <div class="relative min-h-[360px]">
-
-        <!-- LOGIN -->
-        <div id="panel-login" class="form-panel visible-panel">
-          <h2 class="text-xl font-bold text-white mb-1">Welcome back 👋</h2>
-          <p class="text-sm text-slate-500 mb-6">Enter your credentials to access your account.</p>
-
-          <form id="login-form" class="space-y-4" onsubmit="return handleSubmit(event,'login')">
-            <div>
-              <label class="block text-sm font-medium text-slate-300 mb-1.5">Email address</label>
-              <input type="email" name="email" required autocomplete="email" placeholder="you@example.com"
-                class="field w-full px-4 py-3 rounded-lg border border-ink-600 bg-ink-800 text-sm text-white placeholder-slate-600 outline-none" />
-            </div>
-            <div>
-              <div class="flex items-center justify-between mb-1.5">
-                <label class="block text-sm font-medium text-slate-300">Password</label>
-                <a href="#" class="text-xs text-accent-light hover:underline">Forgot password?</a>
-              </div>
-              <div class="relative">
-                <input type="password" name="password" required autocomplete="current-password" placeholder="••••••••"
-                  class="field w-full px-4 py-3 pr-11 rounded-lg border border-ink-600 bg-ink-800 text-sm text-white placeholder-slate-600 outline-none" />
-                <button type="button" onclick="togglePassword(this)" aria-label="Show password"
-                  class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
-                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-                </button>
-              </div>
-            </div>
-            <label class="flex items-center gap-2 text-sm text-slate-400 select-none">
-              <input type="checkbox" name="remember" class="w-4 h-4 rounded border-ink-500 bg-ink-800 text-accent focus:ring-accent focus:ring-offset-ink-850" />
-              Remember me for 30 days
-            </label>
-            <button type="submit"
-              class="w-full py-3 rounded-lg bg-accent hover:bg-accent-dark text-white font-semibold text-sm transition shadow-lg shadow-accent/30 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-              <span class="btn-label">Log in</span>
-            </button>
-          </form>
-        </div>
-
-        <!-- SIGNUP -->
-        <div id="panel-signup" class="form-panel hidden-panel">
-          <h2 class="text-xl font-bold text-white mb-1">Create your account ✈️</h2>
-          <p class="text-sm text-slate-500 mb-6">Join FlyTripVisa and start your application in minutes.</p>
-
-          <form id="signup-form" class="space-y-4" onsubmit="return handleSubmit(event,'signup')">
-            <div>
-              <label class="block text-sm font-medium text-slate-300 mb-1.5">Full name</label>
-              <input type="text" name="name" required autocomplete="name" placeholder="Jane Doe"
-                class="field w-full px-4 py-3 rounded-lg border border-ink-600 bg-ink-800 text-sm text-white placeholder-slate-600 outline-none" />
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-slate-300 mb-1.5">Email address</label>
-              <input type="email" name="email" required autocomplete="email" placeholder="you@example.com"
-                class="field w-full px-4 py-3 rounded-lg border border-ink-600 bg-ink-800 text-sm text-white placeholder-slate-600 outline-none" />
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-slate-300 mb-1.5">Password</label>
-              <div class="relative">
-                <input type="password" name="password" required minlength="8" autocomplete="new-password" placeholder="At least 8 characters"
-                  class="field w-full px-4 py-3 pr-11 rounded-lg border border-ink-600 bg-ink-800 text-sm text-white placeholder-slate-600 outline-none" />
-                <button type="button" onclick="togglePassword(this)" aria-label="Show password"
-                  class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
-                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-                </button>
-              </div>
-            </div>
-            <label class="flex items-start gap-2 text-xs text-slate-500 select-none">
-              <input type="checkbox" name="terms" required class="mt-0.5 w-4 h-4 rounded border-ink-500 bg-ink-800 text-accent focus:ring-accent" />
-              <span>I agree to the <a href="#" class="text-accent-light hover:underline">Terms of Service</a> and <a href="#" class="text-accent-light hover:underline">Privacy Policy</a>.</span>
-            </label>
-            <button type="submit"
-              class="w-full py-3 rounded-lg bg-accent hover:bg-accent-dark text-white font-semibold text-sm transition shadow-lg shadow-accent/30 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-              <span class="btn-label">Create account</span>
-            </button>
-          </form>
-        </div>
-
-      </div>
-
-      <!-- Divider -->
-      <div class="flex items-center gap-3 my-6">
-        <span class="flex-1 h-px bg-ink-700"></span>
-        <span class="text-xs font-medium text-slate-600 uppercase tracking-wide">or continue with</span>
-        <span class="flex-1 h-px bg-ink-700"></span>
-      </div>
-
-      <!-- Social -->
-      <div class="grid grid-cols-3 gap-3">
-        <!-- Google -->
-        <button onclick="socialAuth('google')" aria-label="Continue with Google"
-          class="flex items-center justify-center py-2.5 rounded-lg border border-ink-600 bg-ink-800 hover:bg-ink-700 hover:border-ink-500 transition">
-          <svg class="w-5 h-5" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
-        </button>
-        <!-- Facebook -->
-        <button onclick="socialAuth('facebook')" aria-label="Continue with Facebook"
-          class="flex items-center justify-center py-2.5 rounded-lg border border-ink-600 bg-ink-800 hover:bg-[#1877F2]/15 hover:border-[#1877F2]/40 transition">
-          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-        </button>
-        <!-- Instagram -->
-        <button onclick="socialAuth('instagram')" aria-label="Continue with Instagram"
-          class="flex items-center justify-center py-2.5 rounded-lg border border-ink-600 bg-ink-800 hover:bg-[#E1306C]/15 hover:border-[#E1306C]/40 transition">
-          <svg class="w-5 h-5" viewBox="0 0 24 24"><defs><linearGradient id="ig" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="#FFDC80"/><stop offset="25%" stop-color="#FCAF45"/><stop offset="50%" stop-color="#F77737"/><stop offset="75%" stop-color="#E1306C"/><stop offset="100%" stop-color="#833AB4"/></linearGradient></defs><path fill="url(#ig)" d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>
-        </button>
-      </div>
-
-      <p class="text-center text-xs text-slate-600 mt-6">
-        By continuing you agree to our
-        <a href="#" class="text-accent-light hover:underline">Terms</a> &amp;
-        <a href="#" class="text-accent-light hover:underline">Privacy Policy</a>.
-      </p>
+    <div class="tabs" id="tabs" data-active="login">
+      <div class="indicator"></div>
+      <button type="button" data-tab="login" class="active">Log In</button>
+      <button type="button" data-tab="signup">Sign Up</button>
     </div>
+
+    <!-- LOGIN -->
+    <form id="loginForm" class="active" novalidate>
+      <label for="loginEmail">Email</label>
+      <input id="loginEmail" type="email" autocomplete="email" placeholder="you@example.com" required />
+      <label for="loginPassword">Password</label>
+      <input id="loginPassword" type="password" autocomplete="current-password" placeholder="••••••••" required />
+      <button class="btn-primary" type="submit" id="loginBtn">Log In</button>
+      <div class="msg" id="loginMsg"></div>
+    </form>
+
+    <!-- SIGNUP -->
+    <form id="signupForm" novalidate>
+      <label for="signupName">Full name</label>
+      <input id="signupName" type="text" autocomplete="name" placeholder="Jane Doe" required />
+      <label for="signupEmail">Email</label>
+      <input id="signupEmail" type="email" autocomplete="email" placeholder="you@example.com" required />
+      <label for="signupPassword">Password</label>
+      <input id="signupPassword" type="password" autocomplete="new-password" placeholder="At least 6 characters" required />
+      <button class="btn-primary" type="submit" id="signupBtn">Create Account</button>
+      <div class="msg" id="signupMsg"></div>
+    </form>
+
+    <div class="divider">or continue with</div>
+
+    <div class="socials">
+      <!-- UI-only social buttons. Add OAuth callbacks later. -->
+      <button type="button" class="social-btn" data-provider="google">
+        <svg viewBox="0 0 48 48" aria-hidden="true">
+          <path fill="#EA4335" d="M24 9.5c3.54 0 6.7 1.22 9.19 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+          <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+          <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+          <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+        </svg>
+        Continue with Google
+      </button>
+      <button type="button" class="social-btn" data-provider="facebook">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path fill="#1877F2" d="M24 12.07C24 5.4 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.1 10.13 24v-8.44H7.08v-3.49h3.05V9.41c0-3.02 1.79-4.69 4.53-4.69 1.31 0 2.68.24 2.68.24v2.97h-1.51c-1.49 0-1.96.93-1.96 1.89v2.25h3.33l-.53 3.49h-2.8V24C19.61 23.1 24 18.1 24 12.07z"/>
+        </svg>
+        Continue with Facebook
+      </button>
+      <button type="button" class="social-btn" data-provider="instagram">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <defs>
+            <linearGradient id="ig" x1="0" y1="1" x2="1" y2="0">
+              <stop offset="0%" stop-color="#FEDA75"/>
+              <stop offset="35%" stop-color="#FA7E1E"/>
+              <stop offset="65%" stop-color="#D62976"/>
+              <stop offset="100%" stop-color="#962FBF"/>
+            </linearGradient>
+          </defs>
+          <rect x="2" y="2" width="20" height="20" rx="6" fill="url(#ig)"/>
+          <circle cx="12" cy="12" r="4.5" fill="none" stroke="#fff" stroke-width="1.8"/>
+          <circle cx="17.3" cy="6.7" r="1.2" fill="#fff"/>
+        </svg>
+        Continue with Instagram
+      </button>
+    </div>
+
+    <div class="foot">© FLY VIEW VISA — Secure sign-in</div>
   </div>
 
-  <script>
-    // ---- Tab switching ----
-    function switchTab(mode) {
-      const pill      = document.getElementById('toggle-pill');
-      const loginTab  = document.getElementById('tab-login');
-      const signupTab = document.getElementById('tab-signup');
-      const loginP    = document.getElementById('panel-login');
-      const signupP   = document.getElementById('panel-signup');
+<script>
+(function () {
+  const tabs = document.getElementById("tabs");
+  const title = document.getElementById("title");
+  const subtitle = document.getElementById("subtitle");
+  const loginForm = document.getElementById("loginForm");
+  const signupForm = document.getElementById("signupForm");
+  const loginMsg = document.getElementById("loginMsg");
+  const signupMsg = document.getElementById("signupMsg");
+  const loginBtn = document.getElementById("loginBtn");
+  const signupBtn = document.getElementById("signupBtn");
 
-      if (mode === 'signup') {
-        pill.style.transform = 'translateX(100%)';
-        loginTab.className  = 'relative z-10 flex-1 py-2.5 text-sm font-semibold rounded-lg transition-colors duration-300 text-slate-400';
-        signupTab.className = 'relative z-10 flex-1 py-2.5 text-sm font-semibold rounded-lg transition-colors duration-300 text-white';
-        loginP.className  = 'form-panel hidden-panel';
-        signupP.className = 'form-panel visible-panel';
-      } else {
-        pill.style.transform = 'translateX(0)';
-        signupTab.className = 'relative z-10 flex-1 py-2.5 text-sm font-semibold rounded-lg transition-colors duration-300 text-slate-400';
-        loginTab.className  = 'relative z-10 flex-1 py-2.5 text-sm font-semibold rounded-lg transition-colors duration-300 text-white';
-        signupP.className = 'form-panel hidden-panel';
-        loginP.className  = 'form-panel visible-panel';
+  function setTab(tab) {
+    tabs.dataset.active = tab;
+    tabs.querySelectorAll("button").forEach((b) => {
+      b.classList.toggle("active", b.dataset.tab === tab);
+    });
+    loginForm.classList.toggle("active", tab === "login");
+    signupForm.classList.toggle("active", tab === "signup");
+    if (tab === "login") {
+      title.textContent = "Welcome back";
+      subtitle.textContent = "Sign in to continue your journey";
+    } else {
+      title.textContent = "Create your account";
+      subtitle.textContent = "Start your visa journey with us";
+    }
+    sessionStorage.setItem("ftv_preferred_tab", tab);
+    const url = new URL(window.location.href);
+    url.searchParams.set("mode", tab);
+    history.replaceState(null, "", url);
+  }
+
+  tabs.querySelectorAll("button").forEach((b) => {
+    b.addEventListener("click", () => setTab(b.dataset.tab));
+  });
+
+  // Initial tab: URL ?mode=... wins, then sessionStorage
+  const params = new URLSearchParams(window.location.search);
+  const urlMode = params.get("mode");
+  const storedMode = sessionStorage.getItem("ftv_preferred_tab");
+  const initial = (urlMode === "signup" || urlMode === "login")
+    ? urlMode
+    : (storedMode === "signup" || storedMode === "login" ? storedMode : "login");
+  setTab(initial);
+
+  function showMsg(el, text, kind) {
+    el.textContent = text;
+    el.className = "msg " + (kind || "");
+  }
+
+  async function postJSON(path, body) {
+    const res = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    let data = {};
+    try { data = await res.json(); } catch (_) {}
+    return { res, data };
+  }
+
+  function storeAndRedirect(data) {
+    localStorage.setItem("ftv_auth_token", data.token);
+    localStorage.setItem("ftv_user", JSON.stringify(data.user));
+    window.location.href = data.redirect || "index.html";
+  }
+
+  // LOGIN
+  loginForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    showMsg(loginMsg, "", "");
+    const email = document.getElementById("loginEmail").value.trim();
+    const password = document.getElementById("loginPassword").value;
+    if (!email || !password) {
+      showMsg(loginMsg, "Please enter your email and password.", "error");
+      return;
+    }
+    loginBtn.disabled = true;
+    loginBtn.textContent = "Signing in…";
+    try {
+      const { res, data } = await postJSON("/api/auth/login", { email, password });
+      if (!res.ok || !data.success) {
+        showMsg(loginMsg, data.error || "Login failed.", "error");
+        return;
       }
-      sessionStorage.setItem('ftv_preferred_tab', mode);
+      showMsg(loginMsg, "Success! Redirecting…", "ok");
+      storeAndRedirect(data);
+    } catch (err) {
+      showMsg(loginMsg, "Network error. Please try again.", "error");
+    } finally {
+      loginBtn.disabled = false;
+      loginBtn.textContent = "Log In";
     }
+  });
 
-    // ---- Password visibility ----
-    function togglePassword(btn) {
-      const input = btn.previousElementSibling;
-      input.type = input.type === 'password' ? 'text' : 'password';
+  // SIGNUP
+  signupForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    showMsg(signupMsg, "", "");
+    const name = document.getElementById("signupName").value.trim();
+    const email = document.getElementById("signupEmail").value.trim();
+    const password = document.getElementById("signupPassword").value;
+    if (!name || !email || !password) {
+      showMsg(signupMsg, "All fields are required.", "error");
+      return;
     }
-
-    // ---- Loading state ----
-    const btnLabels = new WeakMap();
-    function setLoading(form, loading) {
-      const btn = form.querySelector('button[type=submit]');
-      if (loading) {
-        if (!btnLabels.has(btn)) {
-          btnLabels.set(btn, btn.querySelector('.btn-label')?.textContent || 'Submit');
-        }
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner"></span><span>Please wait…</span>';
-      } else {
-        btn.disabled = false;
-        const original = btnLabels.get(btn) || 'Submit';
-        btn.innerHTML = '<span class="btn-label">' + original + '</span>';
+    if (password.length < 6) {
+      showMsg(signupMsg, "Password must be at least 6 characters.", "error");
+      return;
+    }
+    signupBtn.disabled = true;
+    signupBtn.textContent = "Creating account…";
+    try {
+      const { res, data } = await postJSON("/api/auth/signup", { name, email, password });
+      if (!res.ok || !data.success) {
+        showMsg(signupMsg, data.error || "Signup failed.", "error");
+        return;
       }
+      showMsg(signupMsg, "Account created! Redirecting…", "ok");
+      storeAndRedirect(data);
+    } catch (err) {
+      showMsg(signupMsg, "Network error. Please try again.", "error");
+    } finally {
+      signupBtn.disabled = false;
+      signupBtn.textContent = "Create Account";
     }
+  });
 
-    // ---- Form submit ----
-    async function handleSubmit(e, mode) {
-      e.preventDefault();
-      const form = e.target;
-      const data = Object.fromEntries(new FormData(form));
-      setLoading(form, true);
-
-      try {
-        const res = await fetch('/api/auth/' + mode, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data),
-        });
-        const result = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(result.error || 'Authentication failed');
-
-        localStorage.setItem('ftv_auth_token', result.token);
-        localStorage.setItem('ftv_user', JSON.stringify(result.user || {}));
-        window.location.href = result.redirect || 'index.html';
-      } catch (err) {
-        setLoading(form, false);
-        alert(err.message);
-      }
-      return false;
-    }
-
-    // ---- Social auth ----
-    function socialAuth(provider) {
-      window.location.href = '/api/auth/oauth/' + provider;
-    }
-
-    // ---- Restore preferred tab ----
-    (function init() {
-      const urlMode = new URLSearchParams(location.search).get('mode');
-      const stored  = sessionStorage.getItem('ftv_preferred_tab');
-      const mode = urlMode || stored || 'login';
-      if (mode === 'signup') switchTab('signup');
-    })();
-  </script>
+  // Social buttons (UI only)
+  document.querySelectorAll(".social-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const provider = btn.dataset.provider;
+      // TODO: OAuth callbacks.
+      //   Google:    window.location.href = "/api/auth/oauth/google/start";
+      //   Facebook:  window.location.href = "/api/auth/oauth/facebook/start";
+      //   Instagram: window.location.href = "/api/auth/oauth/instagram/start";
+      // Each should redirect to the provider's authorize URL, then handle
+      // the callback at /api/auth/oauth/<provider>/callback, exchange the
+      // code, upsert the user, issue our JWT and redirect to /index.html
+      // with the token stored client-side.
+      showMsg(
+        provider === "google" ? loginMsg : signupMsg,
+        provider[0].toUpperCase() + provider.slice(1) + " login coming soon.",
+        ""
+      );
+    });
+  });
+})();
+</script>
 </body>
 </html>
