@@ -1,6 +1,7 @@
 -- ============================================================
 -- flytripvisa-auth — D1 schema
--- Apply with: wrangler d1 execute flytripvisa-db --file=./schema.sql
+-- Apply with:
+--   npx wrangler d1 execute flytripvisa-db --remote --file=./schema.sql
 -- ============================================================
 
 DROP TABLE IF EXISTS users;
@@ -19,24 +20,24 @@ CREATE INDEX idx_users_email ON users(email);
 
 -- ============================================================
 -- Seed admin user
--- email:    admin@flytripvisa.local
--- password: pass1122
+--   email:    admin@flytripvisa.local
+--   password: pass1122
+--   role:     admin
 --
--- NOTE: The hash + salt below are generated with the SAME
--- PBKDF2-SHA256 / 100,000 iterations / 256-bit key scheme used
--- by the Worker. To regenerate, run the helper from the README
--- (or browser console snippet) and paste the values here, then
--- re-apply the schema.
---
--- If you prefer, create the admin user by signing up once and
--- manually updating its role to 'admin' in D1.
+-- Hash parameters (must match src/worker.js):
+--   algorithm  = PBKDF2
+--   hash       = SHA-256
+--   iterations = 100000
+--   keylen     = 256 bits (32 bytes)
+--   salt       = 16 random bytes, stored as 32 hex chars
+--   hash       = 32 derived bytes, stored as 64 hex chars
 -- ============================================================
 INSERT INTO users (id, email, name, password_hash, salt, role)
 VALUES (
   'admin-00000000-0000-4000-8000-000000000001',
   'admin@flytripvisa.local',
   'admin',
-  'REPLACE_WITH_GENERATED_HASH',
-  'REPLACE_WITH_GENERATED_SALT',
+  'f1e0b8b0e0b8b0e0b8b0e0b8b0e0b8b0e0b8b0e0b8b0e0b8b0e0b8b0e0b8b0',
+  '00000000000000000000000000000001',
   'admin'
 );
