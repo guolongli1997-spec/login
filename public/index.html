@@ -22,16 +22,17 @@
   }
   nav {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 16px 24px; border-bottom: 1px solid var(--border);
+    padding: 9px 24px; border-bottom: 1px solid var(--border);
     background: rgba(0,0,0,.7); backdrop-filter: blur(10px);
     position: sticky; top: 0; z-index: 8;
   }
-  .logo { display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: .5px; }
+  .logo { display: flex; align-items: center; gap: 8px; font-weight: 800; letter-spacing: .5px; font-size: 15px; }
   .logo .dot {
-    width: 26px; height: 26px; border-radius: 8px;
+    width: 22px; height: 22px; border-radius: 7px;
     background: linear-gradient(135deg, var(--accent), #7aa2ff);
   }
   .nav-actions { display: flex; align-items: center; gap: 10px; }
+  .nav-actions .btn { padding: 7px 14px; font-size: 13px; }
   .btn {
     border: 1px solid var(--border); background: #0f0f12; color: var(--text);
     padding: 9px 16px; border-radius: 10px; font-size: 14px; font-weight: 600;
@@ -44,7 +45,7 @@
     border: 0; color: #fff;
   }
   .btn-primary:hover { filter: brightness(1.08); }
-  .greeting { color: var(--text); font-size: 14px; }
+  .greeting { color: var(--text); font-size: 13px; }
   .greeting b { color: #fff; }
 
   main { max-width: 960px; margin: 0 auto; padding: 64px 24px; }
